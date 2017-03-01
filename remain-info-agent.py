@@ -1,16 +1,22 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import sys, logging
 import requests, json, base64
-from os import path
-
-# LOG = logging.getLogger(__name__)
+from os import path, system
 
 K_PRE = "RMINFO_"
 K_ENABLE = "RMINFO_ENABLE"
 
-LOG_PATH = './param_agent.log'
+LOG_PATH = '/tmp/param_agent.log'
 NOVA_PATH = '/etc/nova/nova.conf'
 CINDER_PATH = '/etc/cinder/cinder.conf'
+
+logging.basicConfig(level=logging.DEBUG, \
+        format='%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s', \
+        datafmt='%d %b %Y %H:%M:%S', \
+        filename=LOG_PATH, \
+        filemode='w')
+LOG = logging.getLogger(__name__)
 
 def get_range_end():
     s = bytearray(K_PRE)
@@ -18,10 +24,15 @@ def get_range_end():
     return bytes(s)
 
 def restart_nova_service():
-    logging.warning("Configuration changed, restart nova services!!")
+    LOG.info("Configuration changed, restart nova services!!")
+    ret = system('systemctl restart openstack-nova-compute')
+    if ret == 0:
+        LOG.info("Restart nova compute service success")
+    else:
+        LOG.info("Restart nova compute service failed")
 
 def handle_enable(v):
-    logging.warning("%s: %s" % (K_ENABLE, v))
+    LOG.debug("%s: %s" % (K_ENABLE, v))
     # Nova, cinder
     with open(NOVA_PATH, 'r+') as f:
         content = f.read()
@@ -53,7 +64,7 @@ def handle_enable(v):
                     restart_nova_service()
 
 def start_watch(url):
-    logging.warning(url)
+    LOG.debug(url)
     k_pre = base64.b64encode(K_PRE)
     k_range_end = base64.b64encode(get_range_end())
     res = requests.post('http://%s/v3alpha/watch' % url, \
@@ -61,7 +72,7 @@ def start_watch(url):
             stream=True)
 
     for line in res.iter_lines():
-        logging.warning(line)
+        LOG.debug(line)
         line = json.loads(line)
         if line['result'].has_key('events'):
             evts = line['result']['events']
@@ -72,7 +83,7 @@ def start_watch(url):
 
 if __name__ == '__main__':
     if len(sys.argv) < 2:
-        logging.warning("""
+        LOG.warning("""
         Usage: remain-info-agent.py $url [$log $nova $cinder]
         :param $url: The URL of etcd server
         :param $log: optional, the path of log file, -- means default
@@ -91,7 +102,7 @@ if __name__ == '__main__':
         CINDER_PATH = sys.argv[4] if sys.argv[4] != '--' else CINDER_PATH
 
     if not path.exists(NOVA_PATH) or not path.exists(CINDER_PATH):
-        logging.warning("Configure file not exists!")
+        LOG.error("Configure file not exists!")
         sys.exit(1)
 
     start_watch(sys.argv[1])

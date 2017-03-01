@@ -1,0 +1,15 @@
+[Unit]
+Description=Monitor parameters on etcd server and handle changes
+After=syslog.target network.target
+
+[Service]
+Type=notify
+NotifyAccess=all
+TimeoutStartSec=0
+Restart=always
+User=root
+ExecStart=/usr/bin/rminfo-agent 192.168.1.51:2379
+
+[Install]
+WantedBy=multi-user.target
+
